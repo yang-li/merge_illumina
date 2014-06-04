@@ -6,13 +6,16 @@
 #          step 2 -> list of infor: len overlap_len overlap_stop #6-4： it cost too much time for get the infor
 #                 -> find the best overlap_len and then get the len overlap_len o_start o_end
 #          step 3 -> merge
+#memo:0.04 basic functions DONE! the AGCT and AGTC can be achieved!
+#memo:0.05 add a function: when the overlap is the same, the longer length will be important
 use strict;
 
 #my $f1 = qw/AGCT/;
 #my $f2 = qw/AGTC/;
 
-my $f1 = qw/AAAAAAAAAAAAAAAAAAAAAAAAAAAACTG/;
-my $f2 = qw/TTTTTTTTTTTTTTTTTTTTTTTTTTTTGTC/;
+my $f1 = qw/GCAGATTATATGAGTCAGCTACGATATTGTT/;
+my $f2 = qw/TGTTTGGGGTGACACATTACGCGTCTTTGAC/;
+$f2 = reverse $f2;
 #the following will be a sub functions
 my @str1 = split //, $f1;
 my @str2 = split //, $f2;
@@ -22,18 +25,23 @@ my $len = $len_a + $len_b - 1;  #length for conv
 ####################################################
 
 ##########main part################################
+#prepare
+
+
+
+#step 1 begin
 my @conv_result = &conv (@str1, @str2); #step 1
 #step 1 end
 ################################################
 #step 2 start
 my @all_len2bestsocre = &bestscore (@conv_result);
 
-my @best_info = &best(@all_len2bestsocre); #bestscore means the overlap length
+my $best_info = &best(@all_len2bestsocre); #bestscore means the overlap length
 
 #step 2 end
 ###############################################
 #step 3 start
-my $merge_seq = &merge (@best_info);
+my $merge_seq = &merge ($best_info);
 print "$merge_seq\n";
 #my $original_score = values %
 #my $merge_seq = &merge (%best_len2bestscore);
@@ -98,8 +106,8 @@ sub bestscore {
                     $max_length = $cur_length;
                     $max_end = $cur_start;
                     #$result = "$len\t$max_length\t$max_end";
-                    $cur_length = 0;
                 }
+		$cur_length = 0;
             }
             #if ($last_char == 2) {
             #    $max_length = $cur_length;
@@ -109,8 +117,7 @@ sub bestscore {
             $last_char = $cur_char;
             $cur_start++;
             $result = "$len\t$max_length\t$max_end";
-            $info[$i] = $result;
-            
+            $info[$i] = $result;            
             }
 	$i++;
         }
@@ -121,9 +128,10 @@ sub bestscore {
 ##########sub best will find the best one from the all#######
 sub best {
     my @a = @_;
-    my (@temp, %len_overlap, %len_o_end, @result, $i, $o_start); #in: 6 2 4 分别是 长度，重叠区，重叠区结束位置。
+    my (@temp, %len_overlap, %len_o_end, $result, $o_start, $cur_len); #in: 6 2 4 分别是 长度，重叠区，重叠区结束位置。
 								#%len_overlap是长度和重叠的hash，用于找到最大的重叠区
 								#%len_o_end是长度和结束位置的hash，用于最后返回值所需要
+    my $last_len = 0; 
     for (@a) {
 	@temp = split /\t/;
         $len_overlap{$temp[0]} = $temp[1];
@@ -134,14 +142,17 @@ sub best {
     my @key = keys %len_overlap;
     for (@key) {
         if ($max_value == $len_overlap{$_}) {
+	    $cur_len = $_;
+	    next if $last_len > $cur_len;
 	    $o_start = $len_o_end{$_} - $len_overlap{$_};
-	    $result[$i] = "$_\t$len_overlap{$_}\t$len_o_end{$_}\t$o_start";
-	    $i++;
+	    $result = "$cur_len\t$len_overlap{$_}\t$len_o_end{$_}\t$o_start";	    
+	    $last_len = $cur_len;
         }
     }
     #print "1\n";
-    return @result;
+    return $result;
 }
+#0.05 added the functions, long length will be took into consideration when overlap were the same.
 ##############################step 2 core end##################
 ###########################step 3 start####################
 #step 3 will get the final merged sequence
