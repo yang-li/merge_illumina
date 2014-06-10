@@ -8,20 +8,68 @@
 #          step 3 -> merge
 #memo:0.04 basic functions DONE! the AGCT and AGTC can be achieved!
 #memo:0.05 add a function: when the overlap is the same, the longer length will be important
+#memo:0.06 add the function to get the sequence file from command line
+#memo:0.07 solve the problem of waring the uninitialized value. tips: make the seq A as long as the max convlution length.
+
 use strict;
+#use Getopt::Long;
+#use Pod::Usage;
 
 #my $f1 = qw/AGCT/;
 #my $f2 = qw/AGTC/;
+open SEQ1, "$ARGV[0]" or die "$!";
+open SEQ2, "$ARGV[1]" or die "$!";
+open OUT, ">$ARGV[0].assemble";
+my ($f1, $f2, $temp, @temp_f1, @temp_f2, @str1, @str2, $len_conv, $len_a, $len_b);
+my $n = 1;
+while (<SEQ1>) {
+    chomp;
+    if ($n == 1) {
+	$f1 .= "$_\t";
+	chomp ($temp = <SEQ2>);
+	$f2 .= "$temp\t";
+	$n = 2;
+    }elsif ($n == 2) {
+	$f1 .= "$_\t";;
+	chomp ($temp = <SEQ2>);
+	$f2 .= "$temp\t";
+	$n = 3;
+    }elsif ($n == 3) {
+	$f1 .= "$_\t";;
+	chomp ($temp = <SEQ2>);
+	$f2 .= "$temp\t";
+	$n = 4;
+    }elsif ($n == 4) {
+	$f1 .= "$_\t";;
+	chomp ($temp = <SEQ2>);
+	$f2 .= "$temp\t";
+	##tran the seq into info as needed
+	@temp_f1 = split /\t/, $f1;
+	@temp_f2 = split /\t/, $f2;
+	@str1 = split //, $temp_f1[1];
+	@str2 = split //, $temp_f2[1];
+	$len_a = @str1;  #length for seq_1
+	$len_b = @str2;  #length for seq_2
+	$len_conv = $len_a + $len_b - 1;
+	#step 1 begin
+	my @conv_result = &conv (@str1, @str2); #step 1
+	#step 1 end
+	################################################
+	#step 2 start
+	my @all_len2bestsocre = &bestscore (@conv_result);
 
-my $f1 = qw/GCAGATTATATGAGTCAGCTACGATATTGTT/;
-my $f2 = qw/TGTTTGGGGTGACACATTACGCGTCTTTGAC/;
-$f2 = reverse $f2;
-#the following will be a sub functions
-my @str1 = split //, $f1;
-my @str2 = split //, $f2;
-my $len_a = @str1;  #length for seq_1
-my $len_b = @str2;  #length for seq_2
-my $len = $len_a + $len_b - 1;  #length for conv
+	my $best_info = &best(@all_len2bestsocre); #bestscore means the overlap length
+
+	#step 2 end
+	###############################################
+	#step 3 start
+	my $merge_seq = &merge ($best_info);
+	print OUT "$merge_seq\n";
+	$n = 1;
+	$f1 = $f2 = "";
+    }
+}
+
 ####################################################
 
 ##########main part################################
@@ -29,20 +77,7 @@ my $len = $len_a + $len_b - 1;  #length for conv
 
 
 
-#step 1 begin
-my @conv_result = &conv (@str1, @str2); #step 1
-#step 1 end
-################################################
-#step 2 start
-my @all_len2bestsocre = &bestscore (@conv_result);
 
-my $best_info = &best(@all_len2bestsocre); #bestscore means the overlap length
-
-#step 2 end
-###############################################
-#step 3 start
-my $merge_seq = &merge ($best_info);
-print "$merge_seq\n";
 #my $original_score = values %
 #my $merge_seq = &merge (%best_len2bestscore);
 
@@ -50,24 +85,24 @@ print "$merge_seq\n";
 sub conv {
     my @a = @str1;
     my ($i ,$j, $k, @c);
+    #make the length of @a as long as the len_conv, the null part for @a will be filled with X.
     my $temp;
     my @b = @str2;
     #my $len_b = @str2;
     #my $len = $len_a + $len_b - 1; #卷积的长度
     #my @c = reverse @b;
-    for ($i = 0; $i < $len ; $i++) {
+    for ($i = 0; $i < $len_conv ; $i++) {
         for ($k = $i, $j = 0; $k >= 0; $k--, $j++) {
         #for ($k = $i, $j = $len_b - 1; $k >= 0; $k--, $j--) {
-            my $temp_j = $j;
-            if ($j < 0) {
-                $j = $len_b;
-            }  
-            if ($a[$k] eq $b[$j]) {            
-                $temp .= 1;                
-            } else {
+            if ( !defined $a[$k]) {
+                $temp .= 0;
+            }elsif ( !defined $b[$j]) {
+                $temp .= 0;
+            }elsif ( $a[$k] eq $b[$j] ) {
+                $temp .= 1;
+            }elsif ( $a[$k] ne $b[$j] ) {
                 $temp .= 0;
             }
-            $j = $temp_j;
         }
         $c[$i] = $temp;
         $temp = "";
@@ -79,7 +114,8 @@ sub conv {
 #######################step 2 core start##########################
 sub bestscore {
     my @a = @_;
-    my ($cur_char, $cur_start, $flag, $len, @temp, @info, $result, $i);
+    my ($cur_char, $cur_start, $flag, $len, @temp, @info, $result);
+    my $i = 0;
     #info = “$len\t$max_length\t$max_end”
 
     my $last_char = 2; #考虑一开始last_char没赋值，来个2，毕竟我处理的是01的字符串
@@ -162,12 +198,16 @@ sub merge {
     for (@a) {
 	@temp = split /\t/;
 	$len = $temp[0];
+	if ($len <= $len_a) {
+	    $seq = $temp_f1[1];
+	    next;
+	}
 	$overlap = $temp[1];
 	$o_start = $temp[3];
 	$o_end = $temp[2];
-	$part1 = substr $f1, 0, $o_start;
-	$rev_f2 = reverse ($f2);
-	$part_overlap = substr $f1, $o_start, $o_end;
+	$part1 = substr $temp_f1[1], 0, $o_start;
+	$rev_f2 = reverse ($temp_f2[1]);
+	$part_overlap = substr $temp_f1[1], $o_start, $o_end;
 	$ini_posi = index $rev_f2, $part_overlap;
 	$ini_posi += $overlap; 
 	$part2 = substr $rev_f2, $ini_posi;
